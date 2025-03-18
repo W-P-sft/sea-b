@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sea Battle Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f8ff;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .game-setup {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .game-board {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .board-container {
+            margin: 10px;
+            flex: 1;
+            min-width: 400px;
+        }
+        .board {
+            display: grid;
+            grid-template-columns: repeat(32, 1fr);
+            grid-template-rows: repeat(32, 1fr);
+            width: 100%;
+            aspect-ratio: 1;
+            border: 1px solid #000;
+            background-color: #e6f7ff;
+        }
+        .cell {
+            border: 1px solid #ccc;
+            background-color: #e6f7ff;
+            cursor: pointer;
+        }
+        .cell:hover {
+            background-color: #b3e0ff;
+        }
+        .ship {
+            background-color: #808080;
+        }
+        .hit {
+            background-color: #ff6666;
+        }
+        .miss {
+            background-color: #99ccff;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        input {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Sea Battle Game (32x32)</h1>
+    </div>
+
+    <div id="loginForm" class="game-setup">
+        <h2>Enter Your Username</h2>
+        <input type="text" id="username" placeholder="Username">
+        <button id="joinGame">Join Game</button>
+    </div>
+
+    <div id="gameContainer" class="hidden">
+        <div id="shipPlacement" class="game-setup">
+            <h2>Place Your Ships</h2>
+            <p>You need to place 4 ships, each consisting of 4 cells.</p>
+            <div class="board-container">
+                <h3>Your Board</h3>
+                <div id="placementBoard" class="board"></div>
+            </div>
+            <div class="controls">
+                <button id="randomPlace">Random Placement</button>
+                <button id="resetPlacement">Reset</button>
+                <button id="confirmPlacement" disabled>Confirm Placement</button>
+            </div>
+        </div>
+
+        <div id="gamePlay" class="hidden">
+            <div class="game-board">
+                <div class="board-container">
+                    <h3>Your Board</h3>
+                    <div id="playerBoard" class="board"></div>
+                </div>
+                <div class="board-container">
+                    <h3>Opponent's Board</h3>
+                    <div id="opponentBoard" class="board"></div>
+                </div>
+            </div>
+            <div id="gameStatus" class="status">
+                Waiting for opponent...
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+<script>
+    // Game constants
+    const BOARD_SIZE = 32;
+    const SHIP_COUNT = 4;
+    const SHIP_SIZE = 4;
+
+    // Game state
+    let stompClient = null;
+    let playerInfo = {
+        id: null,
+        username: '',
+        isMyTurn: false
+    };
+    let gameRoom = {
+        roomId: '',
+        status: '',
+        player1: null,
+        player2: null,
+        currentTurnPlayerId: null
+    };
+    let ships = [];
+    let placementShips = [];
+    let currentPlacementShip = [];
+
+    // DOM elements
+    const loginForm = document.getElementById('loginForm');
+    const gameContainer = document.getElementById('gameContainer');
+    const shipPlacement = document.getElementById('shipPlacement');
+    const gamePlay = document.getElementById('gamePlay');
+    const placementBoard = document.getElementById('placementBoard');
+    const playerBoard = document.getElementById('playerBoard');
+    const opponentBoard = document.getElementById('opponentBoard');
+    const gameStatus = document.getElementById('gameStatus');
+    const usernameInput = document.getElementById('username');
+    const joinGameButton = document.getElementById('joinGame');
+    const randomPlaceButton = document.getElementById('randomPlace');
+    const resetPlacementButton = document.getElementById('resetPlacement');
+    const confirmPlacementButton = document.getElementById('confirmPlacement');
+
+    // Initialize the game
+    function init() {
+        initBoards();
+        joinGameButton.addEventListener('click', joinGame);
+        randomPlaceButton.addEventListener('click', randomPlacement);
+        resetPlacementButton.addEventListener('click', resetPlacement);
+        confirmPlacementButton.addEventListener('click', confirmPlacement);
+    }
+
+    // Initialize game boards
+    function initBoards() {
+        initBoard(placementBoard, handlePlacementCellClick);
+        initBoard(playerBoard);
+        initBoard(opponentBoard, handleOpponentBoardClick);
+    }
+
+    // Initialize a single board
+    function initBoard(boardElement, clickHandler) {
+        boardElement.innerHTML = '';
+        for (let y = 0; y < BOARD_SIZE; y++) {
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.x = x;
+                cell.dataset.y = y;
+                if (clickHandler) {
+                    cell.addEventListener('click', clickHandler);
+                }
+                boardElement.appendChild(cell);
+            }
+        }
+    }
+
+    // Handle joining the game
+    function joinGame() {
+        const username = usernameInput.value.trim();
+        if (!username) {
+            alert('Please enter a username');
+            return;
+        }
+
+        playerInfo.username = username;
+        connectToWebSocket();
+    }
+
+    // Connect to WebSocket
+    function connectToWebSocket() {
+        const socket = new SockJS('/ws-seabattle');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, onConnected, onError);
+    }
+
+    // Handle successful WebSocket connection
+    function onConnected() {
+        // Subscribe to personal channel
+        stompClient.subscribe('/queue/game-state', onGameStateReceived);
+
+        // Send join request
+        stompClient.send('/app/join', {}, JSON.stringify({
+            username: playerInfo.username
+        }));
+    }
+
+    // Handle WebSocket error
+    function onError(error) {
+        console.error('WebSocket error:', error);
+        gameStatus.textContent = 'Connection error. Please refresh the page and try again.';
+    }
+
+    // Handle game state updates
+    function onGameStateReceived(payload) {
+        alert('GameStateReceived');
+        const gameState = JSON.parse(payload.body);
+
+        // Update game room info
+        gameRoom = gameState;
+
+        // Subscribe to room channel if needed
+        if (gameRoom.roomId && !stompClient.subscriptions['/topic/room/' + gameRoom.roomId]) {
+            stompClient.subscribe('/topic/room/' + gameRoom.roomId, onGameUpdate);
+            alert('subscribed');
+        }
+
+        // Update player info
+        if (gameRoom.player1 && gameRoom.player1.username === playerInfo.username) {
+            playerInfo.id = gameRoom.player1.id;
+        } else if (gameRoom.player2 && gameRoom.player2.username === playerInfo.username) {
+            playerInfo.id = gameRoom.player2.id;
+        }
+
+        // Update turn info
+        playerInfo.isMyTurn = gameRoom.currentTurnPlayerId === playerInfo.id;
+
+        // Show game container
+        loginForm.classList.add('hidden');
+        gameContainer.classList.remove('hidden');
+
+        // Update UI based on game state
+        updateGameUI();
+    }
+
+    // Handle game updates
+    function onGameUpdate(payload) {
+        alert('onGameUpdate');
+        const update = JSON.parse(payload.body);
+
+        switch (update.type) {
+            case 'PLAYER_JOINED':
+                gameStatus.textContent = update.message;
+                break;
+            case 'GAME_STARTED':
+                gameStatus.textContent = update.message;
+                gameRoom.currentTurnPlayerId = update.currentTurnPlayerId;
+                playerInfo.isMyTurn = gameRoom.currentTurnPlayerId === playerInfo.id;
+                updateTurnIndicator();
+                break;
+            case 'SHOT_FIRED':
+                gameRoom.currentTurnPlayerId = update.currentTurnPlayerId;
+                playerInfo.isMyTurn = gameRoom.currentTurnPlayerId === playerInfo.id;
+                updateTurnIndicator();
+
+                // Update the board with the shot result
+                updateBoardWithShot(update.lastShot, update.lastShotResult);
+                break;
+            case 'GAME_OVER':
+                gameStatus.textContent = update.message;
+                playerInfo.isMyTurn = false;
+                break;
+        }
+    }
+
+    // Update game UI based on current state
+    function updateGameUI() {
+        alert('updateUI');
+        if (gameRoom.status === 'WAITING' || gameRoom.status === 'SHIP_PLACEMENT') {
+            shipPlacement.classList.remove('hidden');
+            gamePlay.classList.add('hidden');
+
+            if (gameRoom.player1 && gameRoom.player2) {
+                gameStatus.textContent = 'Both players joined. Place your ships!';
+            } else {
+                gameStatus.textContent = 'Waiting for another player to join...';
+            }
+        } else if (gameRoom.status === 'IN_PROGRESS' || gameRoom.status === 'FINISHED') {
+            shipPlacement.classList.add('hidden');
+            gamePlay.classList.remove('hidden');
+
+            // Render boards with current game state
+            renderGameBoards();
+            updateTurnIndicator();
+        }
+    }
+
+    // Update turn indicator
+    function updateTurnIndicator() {
+        if (gameRoom.status === 'FINISHED') {
+            gameStatus.textContent = 'Game over!';
+            return;
+        }
+
+        if (playerInfo.isMyTurn) {
+            gameStatus.textContent = 'Your turn! Click on the opponent\'s board to fire.';
+        } else {
+            gameStatus.textContent = 'Opponent\'s turn. Waiting for opponent to fire...';
+        }
+    }
+
+    // Render game boards with current state
+    function renderGameBoards() {
+        // Clear boards
+        clearBoard(playerBoard);
+        clearBoard(opponentBoard);
+
+        // Render player's ships
+        const playerShips = playerInfo.id === gameRoom.player1?.id ?
+            gameRoom.gameState.player1Ships : gameRoom.gameState.player2Ships;
+
+        playerShips.forEach(ship => {
+            ship.coordinates.forEach(coord => {
+                const cell = getCellElement(playerBoard, coord.x, coord.y);
+                cell.classList.add('ship');
+                if (coord.hit) {
+                    cell.classList.add('hit');
+                }
+            });
+        });
+
+        // Render shots on opponent's board
+        const playerShots = playerInfo.id === gameRoom.player1?.id ?
+            gameRoom.gameState.player1Shots : gameRoom.gameState.player2Shots;
+
+        playerShots.forEach(shot => {
+            const cell = getCellElement(opponentBoard, shot.x, shot.y);
+            if (cell.classList.contains('ship') && shot.hit) {
+                cell.classList.add('hit');
+            } else {
+                cell.classList.add('miss');
+            }
+        });
+    }
+
+    // Update board with shot result
+    function updateBoardWithShot(shot, result) {
+        const isPlayerShot = gameRoom.currentTurnPlayerId !== playerInfo.id;
+        const board = isPlayerShot ? opponentBoard : playerBoard;
+        const cell = getCellElement(board, shot.x, shot.y);
+
+        if (result === 'HIT' || result === 'SHIP_DESTROYED') {
+            cell.classList.add('hit');
+        } else if (result === 'MISS') {
+            cell.classList.add('miss');
+        }
+    }
+
+    // Handle opponent board click (firing a shot)
+    function handleOpponentBoardClick(event) {
+        if (!playerInfo.isMyTurn || gameRoom.status !== 'IN_PROGRESS') {
+            return;
+        }
+
+        const x = parseInt(event.target.dataset.x);
+        const y = parseInt(event.target.dataset.y);
+
+        // Check if already fired at this cell
+        if (event.target.classList.contains('hit') || event.target.classList.contains('miss')) {
+            return;
+        }
+
+        // Fire shot
+        stompClient.send('/app/fire', {}, JSON.stringify({
+            roomId: gameRoom.roomId,
+            coordinate: { x, y }
+        }));
+    }
+
+    // Handle placement board cell click
+    function handlePlacementCellClick(event) {
+        if (placementShips.length >= SHIP_COUNT) {
+            return;
+        }
+
+        const x = parseInt(event.target.dataset.x);
+        const y = parseInt(event.target.dataset.y);
+
+        // Check if cell is already part of a ship
+        if (isCellOccupied(x, y, placementShips)) {
+            return;
+        }
+
+        // Add cell to current ship
+        currentPlacementShip.push({ x, y });
+        event.target.classList.add('ship');
+
+        // Check if ship is complete
+        if (currentPlacementShip.length === SHIP_SIZE) {
+            placementShips.push([...currentPlacementShip]);
+            currentPlacementShip = [];
+
+            // Enable confirm button if all ships are placed
+            if (placementShips.length === SHIP_COUNT) {
+                confirmPlacementButton.disabled = false;
+            }
+        }
+    }
+
+    // Random ship placement
+    function randomPlacement() {
+        resetPlacement();
+
+        for (let shipIndex = 0; shipIndex < SHIP_COUNT; shipIndex++) {
+            let shipPlaced = false;
+
+            while (!shipPlaced) {
+                // Randomly decide orientation (horizontal = true, vertical = false)
+                const horizontal = Math.random() >= 0.5;
+
+                // Random starting position
+                const startX = Math.floor(Math.random() * (BOARD_SIZE - (horizontal ? SHIP_SIZE : 0)));
+                const startY = Math.floor(Math.random() * (BOARD_SIZE - (horizontal ? 0 : SHIP_SIZE)));
+
+                // Check if ship can be placed
+                const shipCoordinates = [];
+                let canPlace = true;
+
+                for (let i = 0; i < SHIP_SIZE; i++) {
+                    const x = horizontal ? startX + i : startX;
+                    const y = horizontal ? startY : startY + i;
+
+                    if (isCellOccupied(x, y, placementShips)) {
+                        canPlace = false;
+                        break;
+                    }
+
+                    shipCoordinates.push({ x, y });
+                }
+
+                if (canPlace) {
+                    placementShips.push(shipCoordinates);
+
+                    // Update the board
+                    shipCoordinates.forEach(coord => {
+                        const cell = getCellElement(placementBoard, coord.x, coord.y);
+                        cell.classList.add('ship');
+                    });
+
+                    shipPlaced = true;
+                }
+            }
+        }
+
+        confirmPlacementButton.disabled = false;
+    }
+
+    // Reset ship placement
+    function resetPlacement() {
+        placementShips = [];
+        currentPlacementShip = [];
+        confirmPlacementButton.disabled = true;
+
+        clearBoard(placementBoard);
+    }
+
+    // Confirm ship placement
+    function confirmPlacement() {
+        if (placementShips.length !== SHIP_COUNT) {
+            alert('You need to place ' + SHIP_COUNT + ' ships!');
+            return;
+        }
+
+        // Send ship placement to server
+        stompClient.send('/app/place-ships', {}, JSON.stringify({
+            roomId: gameRoom.roomId,
+            ships: placementShips
+        }));
+    }
+
+    // Helper functions
+    function clearBoard(boardElement) {
+        const cells = boardElement.querySelectorAll('.cell');
+        cells.forEach(cell => {
+            cell.className = 'cell';
+        });
+    }
+
+    function getCellElement(boardElement, x, y) {
+        return boardElement.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+    }
+
+    function isCellOccupied(x, y, ships) {
+        for (let ship of ships) {
+            for (let coord of ship) {
+                if (coord.x === x && coord.y === y) {
+                    return true;
+                }
+            }
+        }
+
+        for (let coord of currentPlacementShip) {
+            if (coord.x === x && coord.y === y) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Initialize game on page load
+    window.onload = init;
+</script>
+</body>
+</html>
+
