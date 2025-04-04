@@ -1,11 +1,6 @@
 package com.seabattle.service;
 
-import com.seabattle.model.Coordinate;
-import com.seabattle.model.GameRoom;
-import com.seabattle.model.GameStatus;
-import com.seabattle.model.Player;
-import com.seabattle.model.Ship;
-import com.seabattle.model.ShotResult;
+import com.seabattle.model.*;
 import com.seabattle.repository.GameRoomRepository;
 import com.seabattle.repository.PlayerRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,10 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -31,7 +23,7 @@ public class GameService {
         if (existingPlayer.isPresent()) {
             Player player = existingPlayer.get();
             player.setUsername(username);
-            player.setLastActivity(Instant.now());
+            player.setLastActivity(Date.from(Instant.now()));
             return playerRepository.save(player);
         } else {
             Player newPlayer = new Player(sessionId, username);
@@ -75,6 +67,7 @@ public class GameService {
 
             // Validate ship placement
             if (!room.getGameState().isValidShipPlacement(ships, playerId)) {
+                System.out.println("placeShips isValidShipPlacement:false ");
                 return false;
             }
 
@@ -131,15 +124,21 @@ public class GameService {
             Long targetPlayerId;
             if (playerId.equals(room.getPlayer1().getId())) {
                 targetPlayerId = 2L; // Target player 2
-                room.getGameState().getPlayer1Shots().add(shot);
             } else {
                 targetPlayerId = 1L; // Target player 1
-                room.getGameState().getPlayer2Shots().add(shot);
             }
 
             // Process the shot
             ShotResult result = room.getGameState().processShot(shot, playerId, targetPlayerId);
+            // Set the hit property based on the result
+            shot.setHit(result == ShotResult.HIT || result == ShotResult.SHIP_DESTROYED);
 
+            // Add shot to player's shots list
+            if (playerId.equals(room.getPlayer1().getId())) {
+                room.getGameState().getPlayer1Shots().add(shot);
+            } else {
+                room.getGameState().getPlayer2Shots().add(shot);
+            }
             // Change turn if not a hit
             if (result == ShotResult.MISS) {
                 if (playerId.equals(room.getPlayer1().getId())) {

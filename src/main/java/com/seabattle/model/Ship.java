@@ -12,10 +12,11 @@ import java.util.List;
 @NoArgsConstructor
 public class Ship {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
+
     private List<Coordinate> coordinates = new ArrayList<>();
 
     private boolean destroyed;

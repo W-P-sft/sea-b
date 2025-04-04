@@ -14,7 +14,7 @@ import java.util.List;
 
 public class GameState {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
