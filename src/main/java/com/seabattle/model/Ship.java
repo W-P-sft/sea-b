@@ -15,7 +15,8 @@ public class Ship {
     @GeneratedValue
     private Long id;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
+
     private List<Coordinate> coordinates = new ArrayList<>();
 
     private boolean destroyed;
