@@ -35,27 +35,30 @@ public class GameController {
     @MessageMapping("/join")
     public void joinGame(@Payload JoinGameRequest request, SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();
+        System.out.println("Join request received from session: " + sessionId + " for user: " + request.getUsername());
 
         // Create or update player
         Player player = gameService.createOrUpdatePlayer(sessionId, request.getUsername());
-
+        System.out.println("Player created/updated: " + player);
         // Find or create a game room
         GameRoom room = gameService.findOrCreateGameRoom(player);
-
+        System.out.println("Game room found/created: " + room);
         // Store room ID in WebSocket session
         headerAccessor.getSessionAttributes().put("roomId", room.getRoomId());
         headerAccessor.getSessionAttributes().put("playerId", player.getId());
-
+        System.out.println("Sending game state to user session: " + sessionId);
         // Send game state to the player
         messagingTemplate.convertAndSendToUser(
                 sessionId,
                 "/queue/game-state",
                 room
         );
-
+        System.out.println("Game state sent to user session: " + sessionId);
         // Notify all players in the room
         GameUpdate update = GameUpdate.playerJoined(room.getRoomId(), player.getUsername());
         messagingTemplate.convertAndSend("/topic/room/" + room.getRoomId(), update);
+        System.out.println("Notification sent to room: " + room.getRoomId());
+
     }
 
     @MessageMapping("/place-ships")
@@ -65,6 +68,7 @@ public class GameController {
 
         List<List<Coordinate>> shipCoordinatesList = request.getShips();
         boolean success = gameService.placeShips(roomId, playerId, shipCoordinatesList);
+        System.out.println("placeShips success: " +success);
 
         if (success) {
             // Check if game started

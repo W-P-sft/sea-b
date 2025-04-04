@@ -142,6 +142,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
 
 <script>
+    //[[SEAB-0] WA] const clientId = 'client-' + Math.random().toString(36).substring(2, 15);
     // Game constants
     const BOARD_SIZE = 32;
     const SHIP_COUNT = 4;
@@ -231,13 +232,31 @@
         stompClient = Stomp.over(socket);
 
         stompClient.connect({}, onConnected, onError);
+        // Add debug logging
+        stompClient.debug = function(str) {
+            console.log('STOMP: ' + str);  };
+        stompClient.connect({},
+            function(frame) {
+                console.log('Connected: ' + frame);
+                onConnected();
+            },
+            function(error) {
+                console.error('Connection error: ' + error);
+                onError(error);
+            }
+        );
     }
 
     // Handle successful WebSocket connection
     function onConnected() {
         // Subscribe to personal channel
-        stompClient.subscribe('/queue/game-state', onGameStateReceived);
+        console.log('onConnected()');
+        // Get the current sessionId from the STOMP client
+        const sessionId = stompClient.ws._transport.url.split('/')[5]; // This extracts sessionId from SockJS URL
+        console.log("Extracted session ID:", sessionId);
 
+        // Subscribe with full path including sessionId
+        stompClient.subscribe('/queue/game-state-user' + sessionId , onGameStateReceived);
         // Send join request
         stompClient.send('/app/join', {}, JSON.stringify({
             username: playerInfo.username
@@ -252,7 +271,7 @@
 
     // Handle game state updates
     function onGameStateReceived(payload) {
-        alert('GameStateReceived');
+        console.log('GameStateReceived');
         const gameState = JSON.parse(payload.body);
 
         // Update game room info
@@ -261,7 +280,7 @@
         // Subscribe to room channel if needed
         if (gameRoom.roomId && !stompClient.subscriptions['/topic/room/' + gameRoom.roomId]) {
             stompClient.subscribe('/topic/room/' + gameRoom.roomId, onGameUpdate);
-            alert('subscribed');
+            console.log('subscribed to room channel');
         }
 
         // Update player info
@@ -284,7 +303,7 @@
 
     // Handle game updates
     function onGameUpdate(payload) {
-        alert('onGameUpdate');
+        console.log('onGameUpdate(payload)');
         const update = JSON.parse(payload.body);
 
         switch (update.type) {
@@ -314,7 +333,7 @@
 
     // Update game UI based on current state
     function updateGameUI() {
-        alert('updateUI');
+        console.log('updateGameUI()');
         if (gameRoom.status === 'WAITING' || gameRoom.status === 'SHIP_PLACEMENT') {
             shipPlacement.classList.remove('hidden');
             gamePlay.classList.add('hidden');
