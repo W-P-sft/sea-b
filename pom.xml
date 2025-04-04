@@ -66,6 +66,16 @@
             <scope>runtime</scope>
             <optional>true</optional>
         </dependency>
+        <!-- Messaging support -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-messaging</artifactId>
+        </dependency>
+        <!-- STOMP WebSocket -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-messaging</artifactId>
+        </dependency>
         
         <!-- Testing -->
         <dependency>
