@@ -18,16 +18,16 @@ public class GameRoom {
 
     private String roomId;
 
-    @OneToOne
+    @OneToOne(fetch = FetchType.EAGER)
     private Player player1;
 
-    @OneToOne
+    @OneToOne(fetch = FetchType.EAGER)
     private Player player2;
 
     @Enumerated(EnumType.STRING)
     private GameStatus status;
 
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne(cascade = CascadeType.ALL,fetch = FetchType.EAGER)
     private GameState gameState;
 
     private Long currentTurnPlayerId;
