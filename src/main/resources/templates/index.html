@@ -12,7 +12,7 @@
             background-color: #f0f8ff;
         }
         .container {
-            max-width: 1200px;
+            max-width: 800px;
             margin: 0 auto;
         }
         .header {
@@ -28,16 +28,27 @@
             justify-content: space-between;
             flex-wrap: wrap;
         }
+
         .board-container {
             margin: 10px;
             flex: 1;
-            min-width: 400px;
+            min-width: 300px;
         }
         .board {
             display: grid;
-            grid-template-columns: repeat(32, 1fr);
-            grid-template-rows: repeat(32, 1fr);
+            grid-template-columns: repeat(14, 1fr);
+            grid-template-rows: repeat(14, 1fr);
             width: 100%;
+            aspect-ratio: 1;
+            border: 1px solid #000;
+            background-color: #e6f7ff;
+        }
+        .board-placement {
+            display: grid;
+            width: 35%;
+            grid-template-columns: repeat(14, 1fr);
+            grid-template-rows: repeat(14, 1fr);
+            margin: 0 auto;
             aspect-ratio: 1;
             border: 1px solid #000;
             background-color: #e6f7ff;
@@ -58,6 +69,9 @@
         }
         .miss {
             background-color: #99ccff;
+        }
+        .water {
+            background-color: #b3e0ff;
         }
         .status {
             margin-top: 20px;
@@ -96,7 +110,7 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>Sea Battle Game (32x32)</h1>
+        <h1>Sea Battle Game (14x14)</h1>
     </div>
 
     <div id="loginForm" class="game-setup">
@@ -111,7 +125,7 @@
             <p>You need to place 4 ships, each consisting of 4 cells.</p>
             <div class="board-container">
                 <h3>Your Board</h3>
-                <div id="placementBoard" class="board"></div>
+                <div id="placementBoard" class="board-placement"></div>
             </div>
             <div class="controls">
                 <button id="randomPlace">Random Placement</button>
@@ -144,7 +158,7 @@
 <script>
     //[[SEAB-0] WA] const clientId = 'client-' + Math.random().toString(36).substring(2, 15);
     // Game constants
-    const BOARD_SIZE = 32;
+    const BOARD_SIZE = 14;
     const SHIP_COUNT = 4;
     const SHIP_SIZE = 4;
 
@@ -378,6 +392,7 @@
             gameRoom.gameState.player1Ships : gameRoom.gameState.player2Ships;
 
         playerShips.forEach(ship => {
+            // Render ship cells
             ship.coordinates.forEach(coord => {
                 const cell = getCellElement(playerBoard, coord.x, coord.y);
                 cell.classList.add('ship');
@@ -385,6 +400,16 @@
                     cell.classList.add('hit');
                 }
             });
+
+            // Render water cells around destroyed ships
+            if (ship.destroyed && ship.waterCells) {
+                ship.waterCells.forEach(water => {
+                    const cell = getCellElement(playerBoard, water.x, water.y);
+                    if (!cell.classList.contains('ship')) {
+                        cell.classList.add('water');
+                    }
+                });
+            }
         });
 
         // Render shots on opponent's board
@@ -395,8 +420,23 @@
             const cell = getCellElement(opponentBoard, shot.x, shot.y);
             if (shot.hit) {
                 cell.classList.add('hit');
+            } else if (shot.water) {
+                cell.classList.add('water');
             } else {
                 cell.classList.add('miss');
+            }
+        });
+
+        // Render opponent ship water cells for destroyed ships
+        const opponentShips = playerInfo.id === gameRoom.player1?.id ?
+            gameRoom.gameState.player2Ships : gameRoom.gameState.player1Ships;
+
+        opponentShips.forEach(ship => {
+            if (ship.destroyed && ship.waterCells) {
+                ship.waterCells.forEach(water => {
+                    const cell = getCellElement(opponentBoard, water.x, water.y);
+                    cell.classList.add('water');
+                });
             }
         });
     }
@@ -444,8 +484,8 @@
         const x = parseInt(event.target.dataset.x);
         const y = parseInt(event.target.dataset.y);
 
-        // Check if cell is already part of a ship
-        if (isCellOccupied(x, y, placementShips)) {
+        // Check if cell is already part of a ship or adjacent to a ship
+        if (isCellOccupiedOrAdjacent(x, y, placementShips)) {
             return;
         }
 
@@ -471,12 +511,16 @@
 
         for (let shipIndex = 0; shipIndex < SHIP_COUNT; shipIndex++) {
             let shipPlaced = false;
+            let attempts = 0;
+            const maxAttempts = 1000; // Prevent infinite loop
 
-            while (!shipPlaced) {
+            while (!shipPlaced && attempts < maxAttempts) {
+                attempts++;
+
                 // Randomly decide orientation (horizontal = true, vertical = false)
                 const horizontal = Math.random() >= 0.5;
 
-                // Random starting position
+                // Random starting position, leave margin for the ship size
                 const startX = Math.floor(Math.random() * (BOARD_SIZE - (horizontal ? SHIP_SIZE : 0)));
                 const startY = Math.floor(Math.random() * (BOARD_SIZE - (horizontal ? 0 : SHIP_SIZE)));
 
@@ -488,7 +532,7 @@
                     const x = horizontal ? startX + i : startX;
                     const y = horizontal ? startY : startY + i;
 
-                    if (isCellOccupied(x, y, placementShips)) {
+                    if (isCellOccupiedOrAdjacent(x, y, placementShips)) {
                         canPlace = false;
                         break;
                     }
@@ -508,9 +552,49 @@
                     shipPlaced = true;
                 }
             }
+
+            if (!shipPlaced) {
+                // If we couldn't place all ships, start over
+                resetPlacement();
+                shipIndex = -1; // Will be incremented to 0 in the next iteration
+            }
         }
 
         confirmPlacementButton.disabled = false;
+    }
+
+    // Check if a cell is occupied by a ship or adjacent to a ship
+    function isCellOccupiedOrAdjacent(x, y, ships) {
+        // Check if cell is out of bounds
+        if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) {
+            return true;
+        }
+
+        // Check direct occupation
+        if (isCellOccupied(x, y, ships)) {
+            return true;
+        }
+
+        // Check adjacent cells (including diagonals)
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                if (dx === 0 && dy === 0) continue; // Skip the cell itself
+
+                const nx = x + dx;
+                const ny = y + dy;
+
+                // Skip if out of bounds
+                if (nx < 0 || nx >= BOARD_SIZE || ny < 0 || ny >= BOARD_SIZE) {
+                    continue;
+                }
+
+                if (isCellOccupied(nx, ny, ships)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     // Reset ship placement
@@ -571,4 +655,3 @@
 </script>
 </body>
 </html>
-
