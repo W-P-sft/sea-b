@@ -12,7 +12,7 @@
             background-color: #f0f8ff;
         }
         .container {
-            max-width: 1200px;
+            max-width: 800px;
             margin: 0 auto;
         }
         .header {
@@ -28,16 +28,27 @@
             justify-content: space-between;
             flex-wrap: wrap;
         }
+
         .board-container {
             margin: 10px;
             flex: 1;
-            min-width: 400px;
+            min-width: 300px;
         }
         .board {
             display: grid;
-            grid-template-columns: repeat(32, 1fr);
-            grid-template-rows: repeat(32, 1fr);
+            grid-template-columns: repeat(14, 1fr);
+            grid-template-rows: repeat(14, 1fr);
             width: 100%;
+            aspect-ratio: 1;
+            border: 1px solid #000;
+            background-color: #e6f7ff;
+        }
+        .board-placement {
+            display: grid;
+            width: 35%;
+            grid-template-columns: repeat(14, 1fr);
+            grid-template-rows: repeat(14, 1fr);
+            margin: 0 auto;
             aspect-ratio: 1;
             border: 1px solid #000;
             background-color: #e6f7ff;
@@ -96,7 +107,7 @@
 <body>
 <div class="container">
     <div class="header">
-        <h1>Sea Battle Game (32x32)</h1>
+        <h1>Sea Battle Game (14x14)</h1>
     </div>
 
     <div id="loginForm" class="game-setup">
@@ -111,7 +122,7 @@
             <p>You need to place 4 ships, each consisting of 4 cells.</p>
             <div class="board-container">
                 <h3>Your Board</h3>
-                <div id="placementBoard" class="board"></div>
+                <div id="placementBoard" class="board-placement"></div>
             </div>
             <div class="controls">
                 <button id="randomPlace">Random Placement</button>
@@ -144,7 +155,7 @@
 <script>
     //[[SEAB-0] WA] const clientId = 'client-' + Math.random().toString(36).substring(2, 15);
     // Game constants
-    const BOARD_SIZE = 32;
+    const BOARD_SIZE = 14;
     const SHIP_COUNT = 4;
     const SHIP_SIZE = 4;
 
