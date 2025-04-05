@@ -1,11 +1,12 @@
 package com.seabattle.model;
 
-import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import jakarta.persistence.*;
 
 @Entity
 @Data
@@ -16,13 +17,16 @@ public class Ship {
     private Long id;
 
     @ElementCollection(fetch = FetchType.EAGER)
-
     private List<Coordinate> coordinates = new ArrayList<>();
 
     private boolean destroyed;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    private List<Coordinate> waterCells = new ArrayList<>();
+
     public Ship(List<Coordinate> coordinates) {
-        this.coordinates = coordinates;
+        this.coordinates = new ArrayList<>(coordinates);
         this.destroyed = false;
+        this.waterCells = new ArrayList<>();
     }
 }
