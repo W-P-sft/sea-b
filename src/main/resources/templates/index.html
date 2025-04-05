@@ -393,7 +393,7 @@
 
         playerShots.forEach(shot => {
             const cell = getCellElement(opponentBoard, shot.x, shot.y);
-            if (cell.classList.contains('ship') && shot.hit) {
+            if (shot.hit) {
                 cell.classList.add('hit');
             } else {
                 cell.classList.add('miss');
